@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Virtual environment
+myvenv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local config / editor files
+.vscode/
+.idea/
+.claude/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data output
+data/*.json
+data/*.pkl
