@@ -111,9 +111,16 @@ def crawl_site(start_url: str = START_URL) -> list[PageData]:
     Returns a list of PageData objects (one per page) for the indexer.
     """
     pages: list[PageData] = []
+    visited: set[str] = set()  # prevents processing the same URL twice
     current_url: str | None = start_url
 
     while current_url:
+        # Skip if already visited (defensive check against redirect loops)
+        if current_url in visited:
+            logger.warning("Already visited %s — stopping to avoid loop", current_url)
+            break
+        visited.add(current_url)
+
         logger.info("Fetching: %s", current_url)
 
         html = fetch_page(current_url)
@@ -140,4 +147,5 @@ def crawl_site(start_url: str = START_URL) -> list[PageData]:
 
         current_url = next_url
 
+    logger.info("Crawling complete. Total pages: %d", len(pages))
     return pages
