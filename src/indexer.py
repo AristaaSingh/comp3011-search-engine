@@ -29,9 +29,15 @@ def tokenise(text: str) -> list[str]:
     which strips punctuation like commas and full stops so that 'life,'
     and 'life' are treated as the same word.
 
-    The text coming from the crawler is already lowercase, but we
-    apply .lower() here too so the function works independently.
+    Edge cases handled:
+      - Empty string        → returns []
+      - Punctuation only    → returns []  e.g. "!!!" → []
+      - Mixed punctuation   → stripped    e.g. "hello!!!" → ["hello"]
+      - Already lowercase   → no change   (crawler lowercases, but we do
+                                           it here too for safety)
     """
+    if not text:
+        return []
     return re.findall(r"[a-z']+", text.lower())
 
 
@@ -43,6 +49,11 @@ def add_page_to_index(index: dict, page: PageData) -> None:
     running frequency count, and every position the word appears at.
 
     Modifies the index dict in place — nothing is returned.
+
+    Edge cases handled:
+      - Empty page text     → tokenise returns [], loop is skipped, no crash
+      - Very little content → works fine, just produces fewer index entries
+      - Repeated words      → frequency increments and each position is recorded
     """
     tokens = tokenise(page.text)
 
