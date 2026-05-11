@@ -35,14 +35,39 @@ def tokenise(text: str) -> list[str]:
     return re.findall(r"[a-z']+", text.lower())
 
 
+def add_page_to_index(index: dict, page: PageData) -> None:
+    """
+    Index a single page into an existing index dictionary.
+
+    Tokenises the page text and, for each word, records the page URL,
+    running frequency count, and every position the word appears at.
+
+    Modifies the index dict in place — nothing is returned.
+    """
+    tokens = tokenise(page.text)
+
+    for position, word in enumerate(tokens):
+        # Create entry for this word if it does not exist yet
+        if word not in index:
+            index[word] = {}
+
+        # Create entry for this page under the word if not yet seen
+        if page.url not in index[word]:
+            index[word][page.url] = {"frequency": 0, "positions": []}
+
+        # Update frequency and record this position
+        index[word][page.url]["frequency"] += 1
+        index[word][page.url]["positions"].append(position)
+
+    logger.info("Indexed %s (%d tokens)", page.url, len(tokens))
+
+
 def build_index(pages: list[PageData]) -> dict:
     """
     Build the inverted index from a list of crawled pages.
 
-    For every word on every page, we record:
-      - frequency : total number of times the word appears on that page
-      - positions : list of positions (0-based) where the word appears
-                    in the token list for that page
+    Delegates the per-page work to add_page_to_index, keeping this
+    function focused on orchestration only.
 
     The resulting structure looks like:
         {
@@ -62,22 +87,7 @@ def build_index(pages: list[PageData]) -> dict:
     index = {}
 
     for page in pages:
-        tokens = tokenise(page.text)
-
-        for position, word in enumerate(tokens):
-            # Create entry for word if it does not exist yet
-            if word not in index:
-                index[word] = {}
-
-            # Create entry for this page under the word if not yet seen
-            if page.url not in index[word]:
-                index[word][page.url] = {"frequency": 0, "positions": []}
-
-            # Update frequency and record this position
-            index[word][page.url]["frequency"] += 1
-            index[word][page.url]["positions"].append(position)
-
-        logger.info("Indexed %s (%d tokens)", page.url, len(tokens))
+        add_page_to_index(index, page)
 
     logger.info("Index built. Total unique words: %d", len(index))
     return index
