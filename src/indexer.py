@@ -12,6 +12,7 @@ and easy to inspect or submit alongside the code.
 import re
 import json
 import logging
+from collections import defaultdict
 from pathlib import Path
 
 from src.crawler import PageData
@@ -19,6 +20,10 @@ from src.crawler import PageData
 logger = logging.getLogger(__name__)
 
 INDEX_PATH = Path("data/index.json")
+
+# Type alias for the inverted index structure:
+#   word -> url -> { "frequency": int, "positions": list[int] }
+IndexType = dict[str, dict[str, dict[str, int | list[int]]]]
 
 
 def tokenise(text: str) -> list[str]:
@@ -41,12 +46,15 @@ def tokenise(text: str) -> list[str]:
     return re.findall(r"[a-z']+", text.lower())
 
 
-def add_page_to_index(index: dict, page: PageData) -> None:
+def add_page_to_index(index: IndexType, page: PageData) -> None:
     """
     Index a single page into an existing index dictionary.
 
     Tokenises the page text and, for each word, records the page URL,
     running frequency count, and every position the word appears at.
+
+    Uses defaultdict internally so there is no need to manually check
+    whether a word or URL key exists before writing to it.
 
     Modifies the index dict in place — nothing is returned.
 
@@ -57,28 +65,29 @@ def add_page_to_index(index: dict, page: PageData) -> None:
     """
     tokens = tokenise(page.text)
 
+    if not tokens:
+        logger.warning("No tokens found for %s — page may be empty", page.url)
+        return
+
     for position, word in enumerate(tokens):
-        # Create entry for this word if it does not exist yet
-        if word not in index:
-            index[word] = {}
-
-        # Create entry for this page under the word if not yet seen
-        if page.url not in index[word]:
-            index[word][page.url] = {"frequency": 0, "positions": []}
-
-        # Update frequency and record this position
-        index[word][page.url]["frequency"] += 1
-        index[word][page.url]["positions"].append(position)
+        # defaultdict auto-creates missing word and URL entries,
+        # removing the need for manual existence checks
+        entry = index[word][page.url]
+        entry["frequency"] += 1
+        entry["positions"].append(position)
 
     logger.info("Indexed %s (%d tokens)", page.url, len(tokens))
 
 
-def build_index(pages: list[PageData]) -> dict:
+def build_index(pages: list[PageData]) -> IndexType:
     """
     Build the inverted index from a list of crawled pages.
 
     Delegates the per-page work to add_page_to_index, keeping this
     function focused on orchestration only.
+
+    Uses a nested defaultdict so entries are created automatically
+    on first access — no manual key checks needed.
 
     The resulting structure looks like:
         {
@@ -95,7 +104,11 @@ def build_index(pages: list[PageData]) -> dict:
             ...
         }
     """
-    index = {}
+    # Nested defaultdict: word -> url -> {"frequency": 0, "positions": []}
+    # Each missing key at any level is auto-initialised on first access
+    index: IndexType = defaultdict(
+        lambda: defaultdict(lambda: {"frequency": 0, "positions": []})
+    )
 
     for page in pages:
         add_page_to_index(index, page)
@@ -104,30 +117,70 @@ def build_index(pages: list[PageData]) -> dict:
     return index
 
 
-def save_index(index: dict, path: Path = INDEX_PATH) -> None:
+def save_index(index: IndexType, path: Path = INDEX_PATH) -> None:
     """
-    Save the index dictionary to a JSON file.
+    Save the index to a JSON file.
 
+    Converts the defaultdict to a plain dict before serialising so the
+    JSON file contains no defaultdict-specific metadata.
     Creates the data/ directory if it does not already exist.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(index, f, indent=2)
+        # json.dump handles defaultdict fine (it's a dict subclass),
+        # but we cast explicitly to make the intent clear
+        json.dump({k: dict(v) for k, v in index.items()}, f, indent=2)
     logger.info("Index saved to %s", path)
 
 
-def load_index(path: Path = INDEX_PATH) -> dict:
+def load_index(path: Path = INDEX_PATH) -> IndexType:
     """
     Load and return the index from a JSON file.
 
-    Raises FileNotFoundError with a helpful message if the file does
-    not exist yet — i.e. 'build' has not been run.
+    Validates that the loaded data has the expected structure before
+    returning it, catching corrupted or incompatible index files early.
+
+    Raises:
+      FileNotFoundError  — index file does not exist (run 'build' first)
+      ValueError         — file exists but does not contain a valid index
     """
     if not path.exists():
         raise FileNotFoundError(
             f"No index file found at '{path}'. Run 'build' first."
         )
+
     with open(path, "r", encoding="utf-8") as f:
         index = json.load(f)
+
+    _validate_index(index)
+
     logger.info("Index loaded from %s (%d unique words)", path, len(index))
     return index
+
+
+def _validate_index(index: object) -> None:
+    """
+    Check that a loaded index has the expected structure.
+
+    Expected format:
+        { word(str): { url(str): { "frequency": int, "positions": list } } }
+
+    Raises ValueError with a descriptive message if anything looks wrong.
+    Samples the first entry only — checking every word would be slow on
+    large indexes and offers little extra safety.
+    """
+    if not isinstance(index, dict):
+        raise ValueError("Index file is invalid: expected a JSON object at the top level.")
+
+    # Sample the first word entry to verify the nested structure
+    for word, pages in index.items():
+        if not isinstance(pages, dict):
+            raise ValueError(f"Index file is invalid: entry for '{word}' should be a dict.")
+        for url, stats in pages.items():
+            if not isinstance(stats, dict):
+                raise ValueError(f"Index file is invalid: stats for '{url}' should be a dict.")
+            if "frequency" not in stats or "positions" not in stats:
+                raise ValueError(
+                    f"Index file is invalid: stats for '{url}' missing 'frequency' or 'positions'."
+                )
+        break  # one sample is enough
