@@ -1,16 +1,16 @@
 """
-test_search.py — Tests for search.py
+test_search.py: Tests for search.py
 
 Covers the four explicitly handled cases:
-  1. Word not found     — missing word returned, results empty
-  2. Empty query        — returns empty with no crash
-  3. Mixed case         — Good == good, LIFE == life
-  4. Multi-word query   — AND logic, all words must be on the page
+  1. Word not found : missing word returned, results empty
+  2. Empty query : returns empty with no crash
+  3. Mixed case : Good == good, LIFE == life
+  4. Multi-word query : AND logic, all words must be on the page
 
 Plus:
-  5. Exact word match   — 'friends' does not return pages with 'friendship'
-  6. Output             — print_word and find_and_print message correctness
-  7. Ranking            — higher frequency pages appear first in results
+  5. Exact word match : 'friends' does not return pages with 'friendship'
+  6. Output : print_word and find_and_print message correctness
+  7. Ranking : higher frequency pages appear first in results
 """
 
 import pytest
@@ -33,7 +33,7 @@ def index():
     return build_index(pages)
 
 
-# ── Case 1: word not found ────────────────────────────────────────────────────
+# Case 1: word not found
 
 def test_missing_word_returns_empty_results(index):
     results, missing = find_pages(index, ["nonsense"])
@@ -44,7 +44,7 @@ def test_missing_word_is_named_in_missing_list(index):
     assert "nonsense" in missing
 
 def test_one_missing_word_in_multi_word_query(index):
-    # "life" exists but "xyz" does not — missing should name "xyz"
+    # "life" exists but "xyz" does not, missing should name "xyz"
     results, missing = find_pages(index, ["life", "xyz"])
     assert results == []
     assert "xyz" in missing
@@ -54,7 +54,7 @@ def test_find_and_print_names_missing_word(index, capsys):
     assert "not found" in capsys.readouterr().out
 
 
-# ── Case 2: empty query ───────────────────────────────────────────────────────
+# Case 2: empty query
 
 def test_empty_word_list_returns_empty(index):
     results, missing = find_pages(index, [])
@@ -70,7 +70,7 @@ def test_whitespace_only_query_prints_usage(index, capsys):
     assert "Usage" in capsys.readouterr().out
 
 
-# ── Case 3: mixed case ────────────────────────────────────────────────────────
+# Case 3: mixed case
 
 def test_uppercase_finds_same_pages_as_lowercase(index):
     lower_results, _ = find_pages(index, ["life"])
@@ -87,7 +87,7 @@ def test_all_caps_multi_word_query(index):
     assert results == [URL_2]
 
 
-# ── Case 4: multi-word query (AND logic) ──────────────────────────────────────
+# Case 4: multi-word query (AND logic)
 
 def test_multi_word_returns_only_pages_with_all_words(index):
     # "good" is on URL_1 and URL_2, "friends" is only on URL_2
@@ -95,7 +95,7 @@ def test_multi_word_returns_only_pages_with_all_words(index):
     assert results == [URL_2]
 
 def test_multi_word_no_overlap_returns_empty(index):
-    # "wonder" is on URL_3, "friends" is on URL_2 — no page has both
+    # "wonder" is on URL_3, "friends" is on URL_2 : no page has both
     results, _ = find_pages(index, ["wonder", "friends"])
     assert results == []
 
@@ -109,15 +109,15 @@ def test_single_word_query_returns_all_matching_pages(index):
     assert URL_2 in results
 
 
-# ── Case 5: exact word match ──────────────────────────────────────────────────
+# Case 5: exact word match
 
 def test_friends_does_not_return_friendship_page(index):
-    # URL_3 has "friendship" — searching "friends" must not return it
+    # URL_3 has "friendship" : searching "friends" must not return it
     results, _ = find_pages(index, ["friends"])
     assert URL_3 not in results
 
 def test_friendship_does_not_return_friends_page(index):
-    # URL_2 has "friends" — searching "friendship" must not return it
+    # URL_2 has "friends" : searching "friendship" must not return it
     results, _ = find_pages(index, ["friendship"])
     assert URL_2 not in results
 
@@ -126,7 +126,7 @@ def test_exact_match_returns_correct_page(index):
     assert results == [URL_3]
 
 
-# ── Case 6: print_word output ─────────────────────────────────────────────────
+# Case 6: print_word output
 
 def test_print_word_shows_url(index, capsys):
     print_word(index, "life")
@@ -153,20 +153,20 @@ def test_print_word_case_insensitive(index, capsys):
     assert URL_1 in capsys.readouterr().out
 
 
-# ── Case 7: ranking ───────────────────────────────────────────────────────────
+# Case 7: ranking
 
 @pytest.fixture
 def ranking_index():
     """Index where URL_1 has higher frequency of the query word than URL_2."""
     pages = [
-        PageData(url=URL_1, text="good good good life"),   # good×3, life×1 → score 4
-        PageData(url=URL_2, text="good life life life"),   # good×1, life×3 → score 4 (tie)
-        PageData(url=URL_3, text="good life"),             # good×1, life×1 → score 2
+        PageData(url=URL_1, text="good good good life"), # good*3, life*1 -> score 4
+        PageData(url=URL_2, text="good life life life"), # good*1, life*3 -> score 4 (tie)
+        PageData(url=URL_3, text="good life"), # good*1, life*1 -> score 2
     ]
     return build_index(pages)
 
 def test_rank_results_higher_frequency_first(ranking_index):
-    # URL_3 has the lowest combined frequency for "good life" — must be last
+    # URL_3 has the lowest combined frequency for "good life" : must be last
     results, _ = find_pages(ranking_index, ["good", "life"])
     assert results[-1] == URL_3
 
@@ -180,7 +180,7 @@ def test_rank_results_lowest_frequency_last(ranking_index):
     assert scores == sorted(scores, reverse=True)
 
 def test_rank_results_single_word(ranking_index):
-    # "good" appears 3× on URL_1, 1× on URL_2 and URL_3 — URL_1 should rank first
+    # "good" appears 3x on URL_1, 1x on URL_2 and URL_3 : URL_1 should rank first
     results, _ = find_pages(ranking_index, ["good"])
     assert results[0] == URL_1
 

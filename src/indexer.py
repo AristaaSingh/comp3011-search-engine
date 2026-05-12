@@ -1,12 +1,12 @@
 """
-indexer.py — Builds and saves the inverted index.
+indexer.py: Builds and saves the inverted index.
 
 Takes the list of PageData objects produced by the crawler and builds
 an inverted index: a dictionary mapping every word to the pages it
 appears on, along with how often and at what positions.
 
-The index is saved and loaded as a JSON file so it is human-readable
-and easy to inspect or submit alongside the code.
+The index is saved and loaded as a JSON file so it is readable and easy to
+inspect or submit alongside the code.
 """
 
 import re
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 INDEX_PATH = Path("data/index.json")
 
 # Type alias for the inverted index structure:
-#   word -> url -> { "frequency": int, "positions": list[int] }
+# word -> url -> { "frequency": int, "positions": list[int] }
 IndexType = dict[str, dict[str, dict[str, int | list[int]]]]
 
 
@@ -35,11 +35,10 @@ def tokenise(text: str) -> list[str]:
     and 'life' are treated as the same word.
 
     Edge cases handled:
-      - Empty string        → returns []
-      - Punctuation only    → returns []  e.g. "!!!" → []
-      - Mixed punctuation   → stripped    e.g. "hello!!!" → ["hello"]
-      - Already lowercase   → no change   (crawler lowercases, but we do
-                                           it here too for safety)
+      - Empty string returns []
+      - Punctuation only returns [], eg "!!!" -> []
+      - Mixed punctuation stripped, eg "hello!!!" -> ["hello"]
+      - Already lowercase no change
     """
     if not text:
         return []
@@ -59,14 +58,14 @@ def add_page_to_index(index: IndexType, page: PageData) -> None:
     Modifies the index dict in place — nothing is returned.
 
     Edge cases handled:
-      - Empty page text     → tokenise returns [], loop is skipped, no crash
-      - Very little content → works fine, just produces fewer index entries
-      - Repeated words      → frequency increments and each position is recorded
+      - Empty page text -> tokenise returns [], loop is skipped, no crash
+      - Very little content -> works fine, just produces fewer index entries
+      - Repeated words -> frequency increments and each position is recorded
     """
     tokens = tokenise(page.text)
 
     if not tokens:
-        logger.warning("No tokens found for %s — page may be empty", page.url)
+        logger.warning("No tokens found for %s, page may be empty", page.url)
         return
 
     for position, word in enumerate(tokens):
@@ -87,7 +86,7 @@ def build_index(pages: list[PageData]) -> IndexType:
     function focused on orchestration only.
 
     Uses a nested defaultdict so entries are created automatically
-    on first access — no manual key checks needed.
+    on first access, no manual key checks needed.
 
     The resulting structure looks like:
         {
@@ -141,12 +140,12 @@ def load_index(path: Path = INDEX_PATH) -> IndexType:
     returning it, catching corrupted or incompatible index files early.
 
     Raises:
-      FileNotFoundError  — index file does not exist (run 'build' first)
-      ValueError         — file exists but does not contain a valid index
+      FileNotFoundError : index file does not exist (run 'build' first)
+      ValueError : file exists but does not contain a valid index
     """
     if not path.exists():
         raise FileNotFoundError(
-            f"No index file found at '{path}'. Run 'build' first."
+            f"No index file found at '{path}'. Run 'build' first.\n\n"
         )
 
     with open(path, "r", encoding="utf-8") as f:
@@ -154,7 +153,7 @@ def load_index(path: Path = INDEX_PATH) -> IndexType:
 
     _validate_index(index)
 
-    logger.info("Index loaded from %s (%d unique words)", path, len(index))
+    logger.info("Index loaded from %s (%d unique words)\n\n", path, len(index))
     return index
 
 
@@ -166,21 +165,21 @@ def _validate_index(index: object) -> None:
         { word(str): { url(str): { "frequency": int, "positions": list } } }
 
     Raises ValueError with a descriptive message if anything looks wrong.
-    Samples the first entry only — checking every word would be slow on
+    Samples the first entry only, checking every word would be slow on
     large indexes and offers little extra safety.
     """
     if not isinstance(index, dict):
-        raise ValueError("Index file is invalid: expected a JSON object at the top level.")
+        raise ValueError("Index file is invalid: expected a JSON object at the top level.\n\n")
 
     # Sample the first word entry to verify the nested structure
     for word, pages in index.items():
         if not isinstance(pages, dict):
-            raise ValueError(f"Index file is invalid: entry for '{word}' should be a dict.")
+            raise ValueError(f"Index file is invalid: entry for '{word}' should be a dict.\n\n")
         for url, stats in pages.items():
             if not isinstance(stats, dict):
-                raise ValueError(f"Index file is invalid: stats for '{url}' should be a dict.")
+                raise ValueError(f"Index file is invalid: stats for '{url}' should be a dict.\n\n")
             if "frequency" not in stats or "positions" not in stats:
                 raise ValueError(
-                    f"Index file is invalid: stats for '{url}' missing 'frequency' or 'positions'."
+                    f"Index file is invalid: stats for '{url}' missing 'frequency' or 'positions'.\n\n"
                 )
         break  # one sample is enough

@@ -1,5 +1,5 @@
 """
-test_crawler.py — Tests for crawler.py
+test_crawler.py: Tests for crawler.py
 
 Tests fetch_page against the real quotes.toscrape.com to verify:
   1. At least one URL can be fetched successfully

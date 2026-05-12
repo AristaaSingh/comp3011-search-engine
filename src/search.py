@@ -1,5 +1,5 @@
 """
-search.py — Query the inverted index.
+search.py:  Query the inverted index.
 
 Provides the logic behind two CLI commands:
 
@@ -12,10 +12,10 @@ Provides the logic behind two CLI commands:
       For multiple words only pages containing ALL of them are returned.
 
 Cases explicitly handled:
-  1. Word not found   — clear message telling the user which word is missing
-  2. Empty query      — usage hint printed instead of a confusing empty result
-  3. Mixed case       — all input lowercased before lookup, so Good == good
-  4. Multi-word query — set intersection, every word must appear on the page
+  1. Word not found: clear message telling the user which word is missing
+  2. Empty query: usage hint printed instead of a confusing empty result
+  3. Mixed case: all input lowercased before lookup, so Good == good
+  4. Multi-word query: set intersection, every word must appear on the page
 """
 
 import logging
@@ -32,8 +32,8 @@ def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[st
     Pages where the query words appear more often rank higher.
 
     Example: query "good life"
-      page/1 has good×3, life×2  → score 5  (ranks first)
-      page/2 has good×1, life×1  → score 2  (ranks second)
+      page/1 has good*3, life*2 -> score 5 (ranks first)
+      page/2 has good*1, life*1 -> score 2 (ranks second)
 
     Falls back to URL alphabetical order as a tiebreaker so results
     are always deterministic.
@@ -54,28 +54,28 @@ def find_pages(index: IndexType, words: list[str]) -> tuple[list[str], list[str]
 
     Returns a tuple of (results, missing_words) so the caller can give a
     specific message for each outcome:
-      - missing_words non-empty  → one or more words not in the index at all
-      - results empty            → words exist but no page contains all of them
-      - results non-empty        → pages found
+      - missing_words non-empty -> one or more words not in the index at all
+      - results empty -> words exist but no page contains all of them
+      - results non-empty -> pages found
 
     Case-insensitive: all words are lowercased before lookup.
     Multi-word: uses set intersection so every word must be on the page (AND).
     """
-    # Case 2: empty query — caller should catch this before calling, but
+    # Case 2: empty query, caller should catch this before calling, but
     # guard here too so the function is safe to call independently
     if not words:
         return [], []
 
-    # Case 3: mixed case — normalise everything to lowercase
+    # Case 3: mixed case, normalise everything to lowercase
     words = [w.lower() for w in words]
 
-    # Case 1: word not in index — collect all missing words before returning
+    # Case 1: word not in index: collect all missing words before returning
     # so the message can name exactly which word(s) weren't found
     missing = [w for w in words if w not in index]
     if missing:
         return [], missing
 
-    # Case 4: multi-word query — intersect page sets so only pages containing
+    # Case 4: multi-word query, intersect page sets so only pages containing
     # every word are returned
     page_sets = [set(index[w].keys()) for w in words]
     matching = page_sets[0].intersection(*page_sets[1:])
@@ -123,7 +123,7 @@ def find_and_print(index: IndexType, query: str) -> None:
     knows exactly why there are no results.
 
     Example output for 'find good friends':
-        Results for 'good friends' — 2 word(s), 1 page(s) found:
+        Results for 'good friends' : 2 word(s), 1 page(s) found:
 
           https://quotes.toscrape.com/page/3/
     """
@@ -146,7 +146,7 @@ def find_and_print(index: IndexType, query: str) -> None:
         return
 
     # Success — show matching pages
-    print(f"\nResults for '{query.strip()}' — {len(words)} word(s), {len(results)} page(s) found:\n")
+    print(f"\nResults for '{query.strip()}' : {len(words)} word(s), {len(results)} page(s) found:\n")
     for url in results:
         print(f"  {url}")
     print()

@@ -1,57 +1,51 @@
 """
-crawler.py — Web crawler for quotes.toscrape.com
+crawler.py: Web crawler for quotes.toscrape.com
 
-Crawls the site by following the "Next" pagination button through all
-pages. Each page's visible text is extracted and returned as a list of
+Crawls the entire site using a BFS queue, following every internal link
+found on each page (quote pages, author pages, tag pages, etc.).
+Each page's visible text is extracted and returned as a list of
 PageData objects for the indexer to process.
 
 Required libraries (both explicitly recommended in the brief):
-  - requests    : sends HTTP GET requests
+  - requests       : sends HTTP GET requests
   - beautifulsoup4 : parses HTML and extracts text / links
 """
 
 import time
 import logging
 from dataclasses import dataclass
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-# ── Logging ───────────────────────────────────────────────────────────────────
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+# Constants
 
 START_URL = "https://quotes.toscrape.com/"
 
-# Mandatory politeness window between successive requests (brief requires ≥6 s)
+# Mandatory politeness window between successive requests (at least 6s)
 POLITENESS_DELAY = 6
 
-REQUEST_TIMEOUT = 10  # seconds before giving up on a single request
+# seconds before giving up on a single request
+REQUEST_TIMEOUT = 10
 
 
-# ── Data structure ────────────────────────────────────────────────────────────
-
+# Data structure
 @dataclass
 class PageData:
     """Holds the URL and extracted text content of a single crawled page."""
     url: str
-    text: str  # visible text, lowercased, ready for the indexer
+    text: str # visible text, lowercased, ready for the indexer
 
-
-# ── Core functions ────────────────────────────────────────────────────────────
 
 def fetch_page(url: str) -> str | None:
     """
     Send an HTTP GET request to url and return the raw HTML.
 
     Returns None on any network or HTTP error so the caller can decide
-    whether to skip or abort — the crawl should never crash on a bad page.
-
-    Easy to test with mocks: patch requests.get and check return value.
+    whether to skip, the crawl should never crash on a bad page.
     """
     try:
         response = requests.get(url, timeout=REQUEST_TIMEOUT)
@@ -82,70 +76,89 @@ def parse_text(html: str) -> str:
     return soup.get_text(separator=" ").lower()
 
 
-def find_next_page(soup: BeautifulSoup, base_url: str) -> str | None:
+def find_all_links(soup: BeautifulSoup, base_url: str) -> list[str]:
     """
-    Look for the "Next" pagination button and return its absolute URL.
+    Extract every internal link from a page and return them as absolute URLs.
 
-    On quotes.toscrape.com the next-page link is always wrapped in:
-        <li class="next"><a href="/page/2/">Next →</a></li>
+    Finds all <a href="..."> anchors, converts relative paths to absolute
+    URLs using urljoin, then keeps only links that belong to the same domain
+    as base_url. Fragment-only links (eg #section) are discarded.
 
-    Returns None when there is no next page (i.e. we are on the last page).
-    Using urljoin ensures relative hrefs are converted to absolute URLs safely.
+    This is what allows the crawler to discover author pages, tag pages,
+    and all other sections of the site, not just the paginated quote pages.
     """
-    next_li = soup.find("li", class_="next")
-    if next_li:
-        anchor = next_li.find("a", href=True)
-        if anchor:
-            return urljoin(base_url, anchor["href"])
-    return None
+    base_domain = urlparse(base_url).netloc
+    links: list[str] = []
+    seen: set[str] = set()
+
+    for anchor in soup.find_all("a", href=True):
+        # Build an absolute URL and strip any fragment (#section)
+        absolute = urljoin(base_url, anchor["href"]).split("#")[0]
+
+        if not absolute or absolute in seen:
+            continue
+
+        parsed = urlparse(absolute)
+        # Only keep links that are on the same domain and use http/https
+        if parsed.netloc == base_domain and parsed.scheme in ("http", "https"):
+            links.append(absolute)
+            seen.add(absolute)
+
+    return links
 
 
 def crawl_site(start_url: str = START_URL) -> list[PageData]:
     """
-    Orchestrate the full crawl of the site.
+    Perform the full crawl of the site using a BFS queue.
 
-    Visits pages sequentially by following the "Next" button on each page.
+    Starts at start_url and follows every internal link discovered on each
+    page, so it visits quote pages, author pages, tag pages, and anything
+    else linked from within the site.
+
     Applies the politeness window (time.sleep) between every request so we
-    never hammer the server — the brief requires at least 6 seconds.
+    never hammer the server.
 
     Returns a list of PageData objects (one per page) for the indexer.
     """
     pages: list[PageData] = []
-    visited: set[str] = set()  # prevents processing the same URL twice
-    current_url: str | None = start_url
+    visited: set[str] = set() # prevents fetching the same URL twice
+    queue: list[str] = [start_url] # BFS queue of URLs to visit
 
-    while current_url:
-        # Skip if already visited (defensive check against redirect loops)
+    first_request = True # no sleep before the very first request
+
+    while queue:
+        current_url = queue.pop(0) # take from front, breadth first
+
+        # Skip URLs already processed (queue may contain duplicates)
         if current_url in visited:
-            logger.warning("Already visited %s — stopping to avoid loop", current_url)
-            break
+            continue
         visited.add(current_url)
 
-        logger.info("Fetching: %s", current_url)
+        # Politeness window, wait before every request except the first
+        if not first_request:
+            logger.info("Waiting %s seconds (politeness window)...", POLITENESS_DELAY)
+            time.sleep(POLITENESS_DELAY)
+        first_request = False
 
+        logger.info("Fetching: %s", current_url)
         html = fetch_page(current_url)
 
         if html is None:
-            # Network error — log already printed inside fetch_page, stop crawl
-            logger.error("Stopping crawl: could not fetch %s", current_url)
-            break
+            # Network / HTTP error log already printed inside fetch_page
+            logger.warning("Skipping %s — could not fetch", current_url)
+            continue # skip this page, keep crawling the rest of the queue
 
         # Extract visible text for the index
         text = parse_text(html)
         pages.append(PageData(url=current_url, text=text))
+        print(f"  [{len(pages)}] {current_url}")
         logger.info("Crawled [%d] %s", len(pages), current_url)
 
-        # Check for a next page before sleeping
+        # Discover new links and add unseen ones to the queue
         soup = BeautifulSoup(html, "html.parser")
-        next_url = find_next_page(soup, current_url)
-
-        if next_url:
-            # Politeness window — wait before the next request
-            # (commented clearly so markers can see it)
-            logger.info("Waiting %s seconds (politeness window)...", POLITENESS_DELAY)
-            time.sleep(POLITENESS_DELAY)
-
-        current_url = next_url
+        for link in find_all_links(soup, current_url):
+            if link not in visited:
+                queue.append(link)
 
     logger.info("Crawling complete. Total pages: %d", len(pages))
     return pages
