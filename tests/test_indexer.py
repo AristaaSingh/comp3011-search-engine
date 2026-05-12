@@ -182,3 +182,71 @@ def test_load_raises_if_file_missing(tmp_path):
     """load_index should raise FileNotFoundError if no index file exists."""
     with pytest.raises(FileNotFoundError):
         load_index(tmp_path / "nonexistent.json")
+
+
+# Test 7: tokenise directly
+
+def test_tokenise_basic():
+    """A simple two word string should produce two tokens."""
+    assert tokenise("hello world") == ["hello", "world"]
+
+
+def test_tokenise_numbers_are_excluded():
+    """Numbers should not appear as tokens, only alphabetic words are indexed."""
+    tokens = tokenise("page 2023")
+    assert "2023" not in tokens
+    assert "page" in tokens
+
+
+def test_tokenise_numbers_only_returns_empty():
+    """A string containing only numbers should produce no tokens."""
+    assert tokenise("123 456 789") == []
+
+
+def test_tokenise_keeps_contractions_intact():
+    """Contractions like it's and don't should be kept as single tokens."""
+    tokens = tokenise("it's a test and don't break")
+    assert "it's" in tokens
+    assert "don't" in tokens
+
+
+def test_tokenise_splits_hyphenated_words():
+    """Hyphenated words like well-known should split into two separate tokens."""
+    tokens = tokenise("well-known fact")
+    assert "well" in tokens
+    assert "known" in tokens
+    assert "well-known" not in tokens
+
+
+def test_tokenise_empty_string_returns_empty():
+    """An empty string should return an empty list."""
+    assert tokenise("") == []
+
+
+def test_tokenise_already_lowercase():
+    """Tokenise should return lowercase tokens regardless of input case."""
+    tokens = tokenise("HELLO World")
+    assert "hello" in tokens
+    assert "world" in tokens
+    assert "HELLO" not in tokens
+
+
+# Test 8: save / load edge cases
+
+def test_save_index_overwrites_existing_file(tmp_path):
+    """Saving a second index to the same path should replace the first."""
+    path = tmp_path / "index.json"
+    save_index(build_index([make_page("hello")]), path)
+    save_index(build_index([make_page("goodbye")]), path)
+    loaded = load_index(path)
+    assert "goodbye" in loaded
+    assert "hello" not in loaded
+
+
+def test_load_raises_valueerror_on_invalid_structure(tmp_path):
+    """load_index should raise ValueError if the file exists but has wrong types."""
+    path = tmp_path / "index.json"
+    with open(path, "w") as f:
+        json.dump({"word": "not_a_dict"}, f)
+    with pytest.raises(ValueError):
+        load_index(path)

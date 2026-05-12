@@ -186,3 +186,51 @@ def test_rank_results_single_word(ranking_index):
 
 def test_rank_results_empty_list(ranking_index):
     assert rank_results(ranking_index, [], ["good"]) == []
+
+
+# Case 8: three-word queries
+
+def test_three_word_query_returns_page_with_all_three(index):
+    # URL_2 has "good", "friends", "life", the other pages are missing at least one
+    results, _ = find_pages(index, ["good", "friends", "life"])
+    assert URL_2 in results
+    assert URL_1 not in results
+
+
+def test_three_word_query_no_page_has_all_three(index):
+    # "wonder" only on URL_3, "friends" only on URL_2, "good" on URL_1 and URL_2
+    results, _ = find_pages(index, ["good", "friends", "wonder"])
+    assert results == []
+
+
+# Case 9: duplicate words in query
+
+def test_duplicate_words_in_query_behave_like_single_word(index):
+    """Searching for the same word twice should give the same results as once."""
+    single, _ = find_pages(index, ["life"])
+    double, _ = find_pages(index, ["life", "life"])
+    assert set(double) == set(single)
+
+
+# Case 10: multiple missing words
+
+def test_multiple_missing_words_all_named(index):
+    """If two words are missing, both should appear in the missing list."""
+    _, missing = find_pages(index, ["xyz", "abc"])
+    assert "xyz" in missing
+    assert "abc" in missing
+
+
+def test_find_and_print_names_all_missing_words(index, capsys):
+    """find_and_print output should mention all missing words, not just the first."""
+    find_and_print(index, "xyz abc")
+    out = capsys.readouterr().out
+    assert "xyz" in out or "abc" in out
+
+
+# Case 11: print_word whitespace handling
+
+def test_print_word_strips_surrounding_whitespace(index, capsys):
+    """print_word should find a word even if the input has surrounding spaces."""
+    print_word(index, "  life  ")
+    assert URL_1 in capsys.readouterr().out
