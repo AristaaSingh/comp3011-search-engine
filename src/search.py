@@ -24,6 +24,30 @@ from src.indexer import IndexType
 logger = logging.getLogger(__name__)
 
 
+def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[str]:
+    """
+    Sort a list of page URLs by relevance to the query.
+
+    Relevance score = total frequency of all query words on that page.
+    Pages where the query words appear more often rank higher.
+
+    Example: query "good life"
+      page/1 has good×3, life×2  → score 5  (ranks first)
+      page/2 has good×1, life×1  → score 2  (ranks second)
+
+    Falls back to URL alphabetical order as a tiebreaker so results
+    are always deterministic.
+    """
+    def score(url: str) -> int:
+        return sum(
+            index[word][url]["frequency"]
+            for word in words
+            if url in index.get(word, {})
+        )
+
+    return sorted(urls, key=score, reverse=True)
+
+
 def find_pages(index: IndexType, words: list[str]) -> tuple[list[str], list[str]]:
     """
     Return matching page URLs and any words that were missing from the index.
@@ -55,7 +79,7 @@ def find_pages(index: IndexType, words: list[str]) -> tuple[list[str], list[str]
     # every word are returned
     page_sets = [set(index[w].keys()) for w in words]
     matching = page_sets[0].intersection(*page_sets[1:])
-    return sorted(matching), []
+    return rank_results(index, list(matching), words), []
 
 
 def print_word(index: IndexType, word: str) -> None:

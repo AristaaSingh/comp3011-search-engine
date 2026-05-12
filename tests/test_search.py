@@ -10,12 +10,13 @@ Covers the four explicitly handled cases:
 Plus:
   5. Exact word match   — 'friends' does not return pages with 'friendship'
   6. Output             — print_word and find_and_print message correctness
+  7. Ranking            — higher frequency pages appear first in results
 """
 
 import pytest
 from src.crawler import PageData
 from src.indexer import build_index
-from src.search import find_pages, print_word, find_and_print
+from src.search import find_pages, print_word, find_and_print, rank_results
 
 URL_1 = "https://quotes.toscrape.com/"
 URL_2 = "https://quotes.toscrape.com/page/2/"
@@ -150,3 +151,38 @@ def test_print_word_empty_input(index, capsys):
 def test_print_word_case_insensitive(index, capsys):
     print_word(index, "LIFE")
     assert URL_1 in capsys.readouterr().out
+
+
+# ── Case 7: ranking ───────────────────────────────────────────────────────────
+
+@pytest.fixture
+def ranking_index():
+    """Index where URL_1 has higher frequency of the query word than URL_2."""
+    pages = [
+        PageData(url=URL_1, text="good good good life"),   # good×3, life×1 → score 4
+        PageData(url=URL_2, text="good life life life"),   # good×1, life×3 → score 4 (tie)
+        PageData(url=URL_3, text="good life"),             # good×1, life×1 → score 2
+    ]
+    return build_index(pages)
+
+def test_rank_results_higher_frequency_first(ranking_index):
+    # URL_3 has the lowest combined frequency for "good life" — must be last
+    results, _ = find_pages(ranking_index, ["good", "life"])
+    assert results[-1] == URL_3
+
+def test_rank_results_lowest_frequency_last(ranking_index):
+    results, _ = find_pages(ranking_index, ["good", "life"])
+    scores = [
+        ranking_index["good"][url]["frequency"] + ranking_index["life"][url]["frequency"]
+        for url in results
+    ]
+    # Scores should be in descending order
+    assert scores == sorted(scores, reverse=True)
+
+def test_rank_results_single_word(ranking_index):
+    # "good" appears 3× on URL_1, 1× on URL_2 and URL_3 — URL_1 should rank first
+    results, _ = find_pages(ranking_index, ["good"])
+    assert results[0] == URL_1
+
+def test_rank_results_empty_list(ranking_index):
+    assert rank_results(ranking_index, [], ["good"]) == []
