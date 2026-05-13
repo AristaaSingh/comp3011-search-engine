@@ -11,12 +11,17 @@ Plus:
   5. Exact word match : 'friends' does not return pages with 'friendship'
   6. Output : print_word and find_and_print message correctness
   7. Ranking : higher frequency pages appear first in results
+  8. Three-word queries
+  9. Duplicate words in query
+  10. Multiple missing words
+  11. print_word whitespace handling
+  12. Did you mean suggestions : close matches shown for missing words
 """
 
 import pytest
 from src.crawler import PageData
 from src.indexer import build_index
-from src.search import find_pages, print_word, find_and_print, rank_results
+from src.search import find_pages, print_word, find_and_print, rank_results, suggest_words
 
 URL_1 = "https://quotes.toscrape.com/"
 URL_2 = "https://quotes.toscrape.com/page/2/"
@@ -270,3 +275,44 @@ def test_print_word_strips_surrounding_whitespace(index, capsys):
     """print_word should find a word even if the input has surrounding spaces."""
     print_word(index, "  life  ")
     assert URL_1 in capsys.readouterr().out
+
+
+# Case 12: did you mean suggestions
+
+def test_suggest_words_returns_close_match(index):
+    """A near-miss spelling should return the correct word as a suggestion."""
+    # "frends" is close enough to "friends" (similarity > 0.6)
+    suggestions = suggest_words(index, "frends")
+    assert "friends" in suggestions
+
+
+def test_suggest_words_returns_empty_for_no_match(index):
+    """A completely unrelated string should return no suggestions."""
+    suggestions = suggest_words(index, "xyzxyzxyz")
+    assert suggestions == []
+
+
+def test_suggest_words_excludes_meta_key(index):
+    """The internal '__meta__' key must never appear as a suggestion."""
+    suggestions = suggest_words(index, "__meta__")
+    assert "__meta__" not in suggestions
+
+
+def test_print_word_shows_did_you_mean(index, capsys):
+    """print_word should print a 'Did you mean' hint when a near-miss exists."""
+    print_word(index, "frends")
+    assert "Did you mean" in capsys.readouterr().out
+
+
+def test_find_and_print_shows_did_you_mean(index, capsys):
+    """find_and_print should print a 'Did you mean' hint for a near-miss word."""
+    find_and_print(index, "frends")
+    assert "Did you mean" in capsys.readouterr().out
+
+
+def test_find_and_print_no_suggestion_for_gibberish(index, capsys):
+    """find_and_print should print 'not found' without a suggestion for gibberish."""
+    find_and_print(index, "xyzxyzxyz")
+    out = capsys.readouterr().out
+    assert "not found" in out
+    assert "Did you mean" not in out

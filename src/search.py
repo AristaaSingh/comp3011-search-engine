@@ -12,17 +12,35 @@ Provides the logic behind two CLI commands:
       For multiple words only pages containing ALL of them are returned.
 
 Cases explicitly handled:
-  1. Word not found: clear message telling the user which word is missing
+  1. Word not found: clear message + "Did you mean?" suggestions via difflib
   2. Empty query: usage hint printed instead of a confusing empty result
   3. Mixed case: all input lowercased before lookup, so Good == good
   4. Multi-word query: set intersection, every word must appear on the page
 """
 
 import math
+import difflib
 import logging
 from src.indexer import IndexType
 
 logger = logging.getLogger(__name__)
+
+
+def suggest_words(index: IndexType, word: str) -> list[str]:
+    """
+    Return up to 3 words from the index that closely match word.
+
+    Uses difflib.get_close_matches which computes a similarity ratio based
+    on the longest common subsequence. A cutoff of 0.6 means the candidate
+    must share at least 60% similarity with the query word. This catches
+    common typos (e.g. 'frends' -> 'friends') without suggesting completely
+    unrelated words. The cutoff is a deliberate trade-off: lower values
+    produce more suggestions but risk irrelevant ones.
+
+    The '__meta__' key is excluded since it is internal metadata, not a word.
+    """
+    candidates = [k for k in index if k != "__meta__"]
+    return difflib.get_close_matches(word, candidates, n=3, cutoff=0.6)
 
 
 def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[str]:
@@ -142,9 +160,13 @@ def print_word(index: IndexType, word: str) -> None:
         print("Usage: print <word>")
         return
 
-    # Case 1: word not in index
+    # Case 1: word not in index, suggest close matches if any exist
     if word not in index:
-        print(f"'{word}' was not found in the index.")
+        suggestions = suggest_words(index, word)
+        if suggestions:
+            print(f"'{word}' was not found in the index. Did you mean: {', '.join(suggestions)}?")
+        else:
+            print(f"'{word}' was not found in the index.")
         return
 
     pages = index[word]
@@ -176,9 +198,15 @@ def find_and_print(index: IndexType, query: str) -> None:
 
     results, missing = find_pages(index, words)
 
-    # Case 1: one or more words not in the index at all
+    # Case 1: one or more words not in the index at all, suggest close
+    # matches per missing word so the user knows what to try instead
     if missing:
-        print(f"'{', '.join(missing)}' not found in the index.")
+        for w in missing:
+            suggestions = suggest_words(index, w)
+            if suggestions:
+                print(f"'{w}' not found in the index. Did you mean: {', '.join(suggestions)}?")
+            else:
+                print(f"'{w}' not found in the index.")
         return
 
     # Case 4 (no overlap): words exist but no page contains all of them

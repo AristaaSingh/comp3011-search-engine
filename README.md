@@ -50,6 +50,30 @@ A real example for the word `"life"`:
 
 The file is human-readable and can be opened and inspected directly alongside the code.
 
+## Architecture and Design Decisions
+
+**Crawler: BFS with `collections.deque`**
+
+The crawler uses breadth-first search rather than just following pagination links. This ensures every page type (quote pages, author pages, tag pages) is discovered, not just the ones reachable by clicking "Next". A `deque` is used for the BFS queue because `popleft()` is O(1), whereas removing from the front of a plain list is O(n). All internal links are discovered via `urllib.parse.urljoin` and filtered by domain so external URLs are never followed.
+
+**Indexer: nested `defaultdict`**
+
+The index is built using a nested `defaultdict` so entries are created automatically on first access — no manual key-existence checks needed. Numbers are excluded from tokenisation (the regex only matches `[a-z']+`) because they add noise without contributing to meaningful search results. Contractions like "it's" are kept intact as single tokens.
+
+**Storage: JSON**
+
+The index is saved as a JSON file for human readability and simplicity. The `defaultdict` is converted to a plain `dict` before serialisation. A `__meta__` key is stored alongside the word entries containing the precomputed total page count and per-document lengths, so ranking does not need to recompute these on every query.
+
+**Ranking: normalised TF-IDF**
+
+Search results are ranked using TF-IDF (Term Frequency-Inverse Document Frequency). TF is normalised by document length (frequency / total tokens on the page) to prevent longer pages from being unfairly favoured over shorter ones with higher word density. IDF weights rare words more heavily than common ones — a word appearing on every page gets IDF = 0 and contributes nothing to ranking.
+
+**Query suggestions: `difflib`**
+
+When a search term is not found, the tool uses Python's built-in `difflib.get_close_matches` to suggest similar words from the index. A similarity cutoff of 0.6 was chosen to catch common typos without returning unrelated suggestions.
+
+## Project Structure
+
 ```
 comp3011-search-engine/
   src/
@@ -210,7 +234,7 @@ python -m pytest tests/test_indexer.py tests/test_search.py -v
 
 ## Test File Overview
 
-The suite contains **87 tests** in total: 24 in `test_crawler.py`, 28 in `test_indexer.py`, and 35 in `test_search.py`.
+The suite contains **93 tests** in total: 24 in `test_crawler.py`, 28 in `test_indexer.py`, and 41 in `test_search.py`.
 
 ### test_crawler.py (24 tests)
 
@@ -302,16 +326,17 @@ Tests all five functions in `indexer.py`.
 
 </details>
 
-### test_search.py (35 tests)
+### test_search.py (41 tests)
 
-Tests all four functions in `search.py`.
+Tests all five functions in `search.py`.
 
 | Function | Approach | What is verified |
 |---|---|---|
 | `find_pages` | Shared fixture with a 3-page index | Missing words, empty query, mixed case, single and multi-word AND logic, exact matching, duplicate query words, multiple missing words all named |
-| `print_word` | `capsys` fixture to capture printed output | Correct format (frequency, positions, URL shown), case insensitivity, empty input, surrounding whitespace stripped |
-| `find_and_print` | `capsys` fixture | Each distinct output message produced correctly |
+| `print_word` | `capsys` fixture to capture printed output | Correct format (frequency, positions, URL shown), case insensitivity, empty input, surrounding whitespace stripped, "Did you mean" shown for near-miss |
+| `find_and_print` | `capsys` fixture | Each distinct output message produced correctly, including "Did you mean" for near-miss and no suggestion for gibberish |
 | `rank_results` | Separate fixture with known frequencies | Higher-scoring pages ranked first, lowest-scoring page always last |
+| `suggest_words` | Shared index fixture | Close match returned for near-miss, empty list for gibberish, `__meta__` key never suggested |
 
 <details>
 <summary>Full test list</summary>
@@ -353,5 +378,11 @@ Tests all four functions in `search.py`.
 | 33 | `test_multiple_missing_words_all_named` | All missing words appear in the missing list |
 | 34 | `test_find_and_print_names_all_missing_words` | `find_and_print` output mentions all missing words |
 | 35 | `test_print_word_strips_surrounding_whitespace` | `print_word` finds a word even with surrounding spaces in input |
+| 36 | `test_suggest_words_returns_close_match` | A near-miss spelling returns the correct word as a suggestion |
+| 37 | `test_suggest_words_returns_empty_for_no_match` | A completely unrelated string returns no suggestions |
+| 38 | `test_suggest_words_excludes_meta_key` | The internal `__meta__` key never appears as a suggestion |
+| 39 | `test_print_word_shows_did_you_mean` | `print_word` prints a "Did you mean" hint when a near-miss exists |
+| 40 | `test_find_and_print_shows_did_you_mean` | `find_and_print` prints a "Did you mean" hint for a near-miss word |
+| 41 | `test_find_and_print_no_suggestion_for_gibberish` | `find_and_print` prints "not found" without a suggestion for gibberish input |
 
 </details>
