@@ -18,6 +18,7 @@ Cases explicitly handled:
   4. Multi-word query: set intersection, every word must appear on the page
 """
 
+import math
 import logging
 from src.indexer import IndexType
 
@@ -26,24 +27,56 @@ logger = logging.getLogger(__name__)
 
 def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[str]:
     """
-    Sort a list of page URLs by relevance to the query.
+    Sort a list of page URLs by normalised TF-IDF relevance to the query.
 
-    Relevance score = total frequency of all query words on that page.
-    Pages where the query words appear more often rank higher.
+    For each query word on each page, the score is:
+      TF  = frequency / total tokens on that page (normalised term frequency)
+      IDF = log(total pages in index / pages containing the word)
+      contribution = TF * IDF
 
-    Example: query "good life"
-      page/1 has good*3, life*2 -> score 5 (ranks first)
-      page/2 has good*1, life*1 -> score 2 (ranks second)
+    TF normalisation prevents longer pages from being unfairly favoured:
+    a word appearing 10 times on an 800-token page scores lower than the
+    same word appearing 5 times on a 40-token page, because 10/800 < 5/40.
 
-    Falls back to URL alphabetical order as a tiebreaker so results
-    are always deterministic.
+    IDF ensures rare words carry more weight than common ones. A word that
+    appears on every page gets IDF = 0 and contributes nothing to ranking.
+
+    Document lengths (total tokens per page) are computed from the index by
+    summing the frequency of every word recorded for each URL.
+
+    Example: query "indifference" across 214 pages, appears on 3:
+      IDF = log(214 / 3) = 4.27
+      page/1: frequency 2, doc length 80  -> TF = 0.025, score = 0.025 * 4.27 = 0.107
+      page/2: frequency 1, doc length 20  -> TF = 0.05,  score = 0.05  * 4.27 = 0.214
+      page/2 ranks first despite lower raw frequency, because it is shorter.
     """
-    def score(url: str) -> int:
-        return sum(
-            index[word][url]["frequency"]
-            for word in words
-            if url in index.get(word, {})
-        )
+    if not urls:
+        return []
+
+    # Count total unique pages across the entire index
+    all_pages: set[str] = set()
+    for page_dict in index.values():
+        all_pages.update(page_dict.keys())
+    total_pages = len(all_pages)
+
+    # Compute document length (total tokens) for each page by summing
+    # the frequency of every word recorded for that URL in the index.
+    # This avoids storing document length separately in the index structure.
+    doc_lengths: dict[str, int] = {}
+    for page_dict in index.values():
+        for url, stats in page_dict.items():
+            doc_lengths[url] = doc_lengths.get(url, 0) + stats["frequency"]
+
+    def score(url: str) -> float:
+        total = 0.0
+        doc_len = doc_lengths.get(url, 1) # default to 1 to avoid division by zero
+        for word in words:
+            if word in index and url in index[word]:
+                tf = index[word][url]["frequency"] / doc_len  # normalised TF
+                pages_with_word = len(index[word])
+                idf = math.log(total_pages / pages_with_word)
+                total += tf * idf
+        return total
 
     return sorted(urls, key=score, reverse=True)
 

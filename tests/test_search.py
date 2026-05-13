@@ -153,39 +153,75 @@ def test_print_word_case_insensitive(index, capsys):
     assert URL_1 in capsys.readouterr().out
 
 
-# Case 7: ranking
+# Case 7: normalised TF-IDF ranking
+#
+# "rare" appears on URL_1 and URL_2 only, giving IDF("rare") > 0.
+# "common" appears on all three pages, giving IDF("common") = log(3/3) = 0.
+#
+# URL_1: "rare rare rare common" -> 4 tokens, rare TF = 3/4 = 0.75
+# URL_2: "rare common"          -> 2 tokens, rare TF = 1/2 = 0.50
+# URL_3: "common"               -> 1 token,  no rare
+#
+# With normalised TF-IDF, URL_1 still ranks above URL_2 for "rare"
+# because 0.75 > 0.50, and normalisation doesn't change that here.
+# The key benefit of normalisation shows when comparing pages of very
+# different lengths, preventing a long page from winning purely on bulk.
 
 @pytest.fixture
 def ranking_index():
-    """Index where URL_1 has higher frequency of the query word than URL_2."""
     pages = [
-        PageData(url=URL_1, text="good good good life"), # good*3, life*1 -> score 4
-        PageData(url=URL_2, text="good life life life"), # good*1, life*3 -> score 4 (tie)
-        PageData(url=URL_3, text="good life"), # good*1, life*1 -> score 2
+        PageData(url=URL_1, text="rare rare rare common"), # 4 tokens, rare TF = 3/4
+        PageData(url=URL_2, text="rare common"),           # 2 tokens, rare TF = 1/2
+        PageData(url=URL_3, text="common"),                # 1 token,  no rare
     ]
     return build_index(pages)
 
-def test_rank_results_higher_frequency_first(ranking_index):
-    # URL_3 has the lowest combined frequency for "good life" : must be last
-    results, _ = find_pages(ranking_index, ["good", "life"])
-    assert results[-1] == URL_3
 
-def test_rank_results_lowest_frequency_last(ranking_index):
-    results, _ = find_pages(ranking_index, ["good", "life"])
-    scores = [
-        ranking_index["good"][url]["frequency"] + ranking_index["life"][url]["frequency"]
-        for url in results
-    ]
-    # Scores should be in descending order
-    assert scores == sorted(scores, reverse=True)
-
-def test_rank_results_single_word(ranking_index):
-    # "good" appears 3x on URL_1, 1x on URL_2 and URL_3 : URL_1 should rank first
-    results, _ = find_pages(ranking_index, ["good"])
+def test_tfidf_higher_normalised_tf_ranks_first(ranking_index):
+    # URL_1 has rare TF = 0.75, URL_2 has rare TF = 0.50: URL_1 ranks first
+    results, _ = find_pages(ranking_index, ["rare"])
     assert results[0] == URL_1
 
+
+def test_tfidf_lower_normalised_tf_ranks_last(ranking_index):
+    # URL_2 has the lowest normalised TF for "rare": it should be last
+    results, _ = find_pages(ranking_index, ["rare"])
+    assert results[-1] == URL_2
+
+
+def test_tfidf_common_word_returns_all_pages(ranking_index):
+    # "common" is on all 3 pages, IDF = 0, all pages should appear in results
+    results, _ = find_pages(ranking_index, ["common"])
+    assert set(results) == {URL_1, URL_2, URL_3}
+
+
+def test_tfidf_rare_word_dominates_score_in_multi_word_query(ranking_index):
+    # IDF("common") = 0 so it contributes nothing, only "rare" drives ranking
+    # URL_1 (rare TF = 0.75) should rank above URL_2 (rare TF = 0.50)
+    results, _ = find_pages(ranking_index, ["rare", "common"])
+    assert results[0] == URL_1
+
+
+def test_tfidf_shorter_page_with_higher_density_ranks_higher():
+    # Normalisation benefit: URL_2 is shorter but has higher word density.
+    # URL_3 has no "good" so IDF("good") = log(3/2) > 0, making scores non-zero.
+    # URL_1: "good good good filler filler filler filler filler" -> good TF = 3/8 = 0.375
+    # URL_2: "good good"                                         -> good TF = 2/2 = 1.0
+    # URL_3: "filler"                                            -> no good
+    # URL_2 should rank above URL_1 despite fewer raw occurrences, because
+    # normalised TF (1.0) beats (0.375) when page length is accounted for.
+    pages = [
+        PageData(url=URL_1, text="good good good filler filler filler filler filler"),
+        PageData(url=URL_2, text="good good"),
+        PageData(url=URL_3, text="filler"),
+    ]
+    dense_index = build_index(pages)
+    results, _ = find_pages(dense_index, ["good"])
+    assert results[0] == URL_2
+
+
 def test_rank_results_empty_list(ranking_index):
-    assert rank_results(ranking_index, [], ["good"]) == []
+    assert rank_results(ranking_index, [], ["rare"]) == []
 
 
 # Case 8: three-word queries
