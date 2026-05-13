@@ -112,7 +112,24 @@ def build_index(pages: list[PageData]) -> IndexType:
     for page in pages:
         add_page_to_index(index, page)
 
-    logger.info("Index built. Total unique words: %d", len(index))
+    # Precompute metadata used by rank_results so it is not recalculated
+    # on every search query. Stored under "__meta__" which cannot clash with
+    # any real word token since tokenise only produces [a-z'] characters.
+    all_urls: set[str] = set()
+    for page_dict in index.values():
+        all_urls.update(page_dict.keys())
+
+    doc_lengths: dict[str, int] = {}
+    for page_dict in index.values():
+        for url, stats in page_dict.items():
+            doc_lengths[url] = doc_lengths.get(url, 0) + stats["frequency"]
+
+    index["__meta__"] = {
+        "total_pages": len(all_urls),
+        "doc_lengths": doc_lengths,
+    }
+
+    logger.info("Index built. Total unique words: %d", len(index) - 1)
     return index
 
 
@@ -173,6 +190,8 @@ def _validate_index(index: object) -> None:
 
     # Sample the first word entry to verify the nested structure
     for word, pages in index.items():
+        if word == "__meta__":
+            continue  # internal metadata, not a word entry
         if not isinstance(pages, dict):
             raise ValueError(f"Index file is invalid: entry for '{word}' should be a dict.\n\n")
         for url, stats in pages.items():

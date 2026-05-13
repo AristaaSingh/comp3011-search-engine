@@ -41,8 +41,9 @@ def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[st
     IDF ensures rare words carry more weight than common ones. A word that
     appears on every page gets IDF = 0 and contributes nothing to ranking.
 
-    Document lengths (total tokens per page) are computed from the index by
-    summing the frequency of every word recorded for each URL.
+    Document lengths (total tokens per page) and total page count are
+    precomputed by build_index and stored in the index under "__meta__",
+    so they are read once rather than recalculated on every query.
 
     Example: query "indifference" across 214 pages, appears on 3:
       IDF = log(214 / 3) = 4.27
@@ -53,19 +54,25 @@ def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[st
     if not urls:
         return []
 
-    # Count total unique pages across the entire index
-    all_pages: set[str] = set()
-    for page_dict in index.values():
-        all_pages.update(page_dict.keys())
-    total_pages = len(all_pages)
-
-    # Compute document length (total tokens) for each page by summing
-    # the frequency of every word recorded for that URL in the index.
-    # This avoids storing document length separately in the index structure.
-    doc_lengths: dict[str, int] = {}
-    for page_dict in index.values():
-        for url, stats in page_dict.items():
-            doc_lengths[url] = doc_lengths.get(url, 0) + stats["frequency"]
+    # Read metadata precomputed by build_index. Fall back to computing on
+    # the fly if the index was built without it (e.g., an old index file).
+    meta = index.get("__meta__", {})
+    if meta:
+        total_pages: int = meta["total_pages"]
+        doc_lengths: dict[str, int] = meta["doc_lengths"]
+    else:
+        all_pages: set[str] = {
+            url
+            for word, page_dict in index.items()
+            if word != "__meta__"
+            for url in page_dict
+        }
+        total_pages = len(all_pages)
+        doc_lengths = {}
+        for word, page_dict in index.items():
+            if word != "__meta__":
+                for url, stats in page_dict.items():
+                    doc_lengths[url] = doc_lengths.get(url, 0) + stats["frequency"]
 
     def score(url: str) -> float:
         total = 0.0
@@ -99,8 +106,9 @@ def find_pages(index: IndexType, words: list[str]) -> tuple[list[str], list[str]
     if not words:
         return [], []
 
-    # Case 3: mixed case, normalise everything to lowercase
-    words = [w.lower() for w in words]
+    # Case 3: mixed case, normalise to lowercase and deduplicate (preserving
+    # order) so a word appearing twice does not inflate its TF-IDF score
+    words = list(dict.fromkeys(w.lower() for w in words))
 
     # Case 1: word not in index: collect all missing words before returning
     # so the message can name exactly which word(s) weren't found

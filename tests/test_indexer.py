@@ -119,9 +119,9 @@ def test_frequencies_tracked_per_page():
 # Test 5: Edge cases
 
 def test_empty_text_does_not_crash():
-    """An empty page should produce no index entries and not raise."""
+    """An empty page should produce no word entries and not raise."""
     index = build_index([make_page("")])
-    assert index == {}
+    assert all(k == "__meta__" for k in index)
 
 
 def test_punctuation_is_stripped():
@@ -132,9 +132,9 @@ def test_punctuation_is_stripped():
 
 
 def test_punctuation_only_text():
-    """A page containing only punctuation should produce no index entries."""
+    """A page containing only punctuation should produce no word entries."""
     index = build_index([make_page("!!! ??? ...")])
-    assert index == {}
+    assert all(k == "__meta__" for k in index)
 
 
 def test_very_little_content():

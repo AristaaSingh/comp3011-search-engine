@@ -43,12 +43,12 @@ def run_shell() -> None:
             pages = crawl_site()
             index = build_index(pages)
             save_index(index)
-            print(f"Done. {len(pages)} page(s) crawled, {len(index)} unique word(s) indexed.")
+            print(f"Done. {len(pages)} page(s) crawled, {len(index) - 1} unique word(s) indexed.")
 
         elif command == "load":
             try:
                 index = load_index()
-                print(f"Index loaded: {len(index)} unique word(s).")
+                print(f"Index loaded: {len(index) - 1} unique word(s).")
             except FileNotFoundError as e:
                 print(f"Error: {e}")
 

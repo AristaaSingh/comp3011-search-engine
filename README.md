@@ -210,9 +210,11 @@ python -m pytest tests/test_indexer.py tests/test_search.py -v
 
 ## Test File Overview
 
-The suite contains **85 tests** in total: 24 in `test_crawler.py`, 28 in `test_indexer.py`, and 33 in `test_search.py`.
+The suite contains **87 tests** in total: 24 in `test_crawler.py`, 28 in `test_indexer.py`, and 35 in `test_search.py`.
 
-**test_crawler.py** (24 tests): tests all four functions in `crawler.py`
+### test_crawler.py (24 tests)
+
+Tests all four functions in `crawler.py`.
 
 | Function | Approach | What is verified |
 |---|---|---|
@@ -221,7 +223,41 @@ The suite contains **85 tests** in total: 24 in `test_crawler.py`, 28 in `test_i
 | `find_all_links` | Hand-crafted HTML with various link types | Relative to absolute conversion, external domains excluded, fragments stripped, no duplicates, `mailto:` and `javascript:` filtered out |
 | `crawl_site` | `fetch_page` and `time.sleep` both mocked | Correct page count, URLs recorded, failed pages skipped, no URL revisited |
 
-**test_indexer.py** (28 tests): tests all five functions in `indexer.py`
+<details>
+<summary>Full test list</summary>
+
+| # | Test | What it verifies |
+|---|---|---|
+| 1 | `test_fetches_at_least_one_url` | `fetch_page` successfully retrieves the homepage |
+| 2 | `test_valid_url_returns_non_empty_content` | A valid URL returns a non-empty HTML string |
+| 3 | `test_invalid_url_handled_gracefully` | A 404 URL returns `None` without raising an exception |
+| 4 | `test_parse_text_extracts_text` | Basic paragraph text is extracted from HTML |
+| 5 | `test_parse_text_strips_tags` | HTML tags do not appear in the output |
+| 6 | `test_parse_text_returns_lowercase` | All output is lowercased regardless of input case |
+| 7 | `test_parse_text_empty_html` | Empty input returns a string without crashing |
+| 8 | `test_parse_text_multiple_elements` | Text from multiple elements is all present in output |
+| 9 | `test_parse_text_excludes_script_tag_content` | JavaScript inside script tags is not extracted |
+| 10 | `test_parse_text_excludes_style_tag_content` | CSS inside style tags is not extracted |
+| 11 | `test_find_all_links_converts_relative_to_absolute` | Relative hrefs are returned as absolute URLs |
+| 12 | `test_find_all_links_excludes_external_domains` | Links to other domains are excluded |
+| 13 | `test_find_all_links_strips_fragments` | Fragment anchors do not appear in returned links |
+| 14 | `test_find_all_links_no_duplicates` | The same URL appearing twice is only returned once |
+| 15 | `test_find_all_links_empty_page` | A page with no anchors returns an empty list |
+| 16 | `test_find_all_links_includes_absolute_internal` | Absolute hrefs on the same domain are included |
+| 17 | `test_find_all_links_excludes_mailto` | `mailto:` links are excluded |
+| 18 | `test_find_all_links_excludes_javascript` | `javascript:` links are excluded |
+| 19 | `test_crawl_site_returns_correct_number_of_pages` | One `PageData` is returned per crawled page |
+| 20 | `test_crawl_site_records_correct_urls` | Each `PageData` stores the URL it came from |
+| 21 | `test_crawl_site_skips_failed_pages` | Pages where `fetch_page` returns `None` are skipped without crashing |
+| 22 | `test_crawl_site_does_not_revisit_urls` | A page linking back to itself is only crawled once |
+| 23 | `test_crawl_site_text_is_extracted` | `PageData.text` contains visible text from the page |
+| 24 | `test_crawl_site_follows_chain_of_pages` | Crawler follows links across a chain of pages, not just one hop |
+
+</details>
+
+### test_indexer.py (28 tests)
+
+Tests all five functions in `indexer.py`.
 
 | Function | Approach | What is verified |
 |---|---|---|
@@ -230,7 +266,45 @@ The suite contains **85 tests** in total: 24 in `test_crawler.py`, 28 in `test_i
 | Edge cases | Hardcoded inputs | Empty page text, punctuation-only text, mixed punctuation attached to words |
 | `save_index`, `load_index` | `tmp_path` fixture for temporary files | Full round-trip, overwriting existing file, `FileNotFoundError` on missing file, `ValueError` on invalid structure |
 
-**test_search.py** (33 tests): tests all four functions in `search.py`
+<details>
+<summary>Full test list</summary>
+
+| # | Test | What it verifies |
+|---|---|---|
+| 1 | `test_basic_indexing_words_in_index` | Both words from a simple page appear in the index |
+| 2 | `test_basic_indexing_url_recorded` | The page URL is recorded under each word |
+| 3 | `test_frequency_single_occurrence` | A word appearing once has frequency 1 |
+| 4 | `test_frequency_repeated_word` | A word appearing twice has frequency 2 |
+| 5 | `test_frequency_many_repeats` | A word appearing three times has frequency 3 |
+| 6 | `test_positions_single_word` | A single word is recorded at position 0 |
+| 7 | `test_positions_repeated_word` | Repeated words record all positions correctly |
+| 8 | `test_positions_are_zero_based` | First word is at position 0, second at position 1 |
+| 9 | `test_same_word_across_two_pages` | The same word on two pages has two URL entries |
+| 10 | `test_word_unique_to_one_page` | A word only on page 1 does not appear under page 2 |
+| 11 | `test_frequencies_tracked_per_page` | Frequency counts are independent per page |
+| 12 | `test_empty_text_does_not_crash` | An empty page produces no index entries and does not raise |
+| 13 | `test_punctuation_is_stripped` | `hello!!!` is indexed as `hello`, not `hello!!!` |
+| 14 | `test_punctuation_only_text` | A page of only punctuation produces no index entries |
+| 15 | `test_very_little_content` | A single-word page indexes correctly without errors |
+| 16 | `test_mixed_punctuation_and_words` | Punctuation attached to words is stripped cleanly |
+| 17 | `test_save_and_load_round_trip` | Index saved to disk loads back identical to the original |
+| 18 | `test_saved_file_is_valid_json` | The saved file is parseable JSON |
+| 19 | `test_load_raises_if_file_missing` | `load_index` raises `FileNotFoundError` if no file exists |
+| 20 | `test_tokenise_basic` | A simple two-word string produces two tokens |
+| 21 | `test_tokenise_numbers_are_excluded` | Numbers do not appear as tokens |
+| 22 | `test_tokenise_numbers_only_returns_empty` | A string of only numbers produces no tokens |
+| 23 | `test_tokenise_keeps_contractions_intact` | Contractions like `it's` and `don't` are kept as single tokens |
+| 24 | `test_tokenise_splits_hyphenated_words` | Hyphenated words like `well-known` split into two tokens |
+| 25 | `test_tokenise_empty_string_returns_empty` | An empty string returns an empty list |
+| 26 | `test_tokenise_already_lowercase` | Output is always lowercase regardless of input case |
+| 27 | `test_save_index_overwrites_existing_file` | Saving to an existing path replaces the previous file |
+| 28 | `test_load_raises_valueerror_on_invalid_structure` | `load_index` raises `ValueError` on a structurally broken file |
+
+</details>
+
+### test_search.py (35 tests)
+
+Tests all four functions in `search.py`.
 
 | Function | Approach | What is verified |
 |---|---|---|
@@ -238,3 +312,46 @@ The suite contains **85 tests** in total: 24 in `test_crawler.py`, 28 in `test_i
 | `print_word` | `capsys` fixture to capture printed output | Correct format (frequency, positions, URL shown), case insensitivity, empty input, surrounding whitespace stripped |
 | `find_and_print` | `capsys` fixture | Each distinct output message produced correctly |
 | `rank_results` | Separate fixture with known frequencies | Higher-scoring pages ranked first, lowest-scoring page always last |
+
+<details>
+<summary>Full test list</summary>
+
+| # | Test | What it verifies |
+|---|---|---|
+| 1 | `test_missing_word_returns_empty_results` | A missing word returns an empty results list |
+| 2 | `test_missing_word_is_named_in_missing_list` | The missing word is named in the returned missing list |
+| 3 | `test_one_missing_word_in_multi_word_query` | One missing word in a multi-word query names that word |
+| 4 | `test_find_and_print_names_missing_word` | `find_and_print` output includes "not found" for missing words |
+| 5 | `test_empty_word_list_returns_empty` | An empty word list returns empty results and no missing words |
+| 6 | `test_empty_string_query_prints_usage` | An empty string query prints a usage hint |
+| 7 | `test_whitespace_only_query_prints_usage` | A whitespace-only query prints a usage hint |
+| 8 | `test_uppercase_finds_same_pages_as_lowercase` | `LIFE` and `life` return identical results |
+| 9 | `test_mixed_case_finds_correct_pages` | `Good` finds the same pages as `good` |
+| 10 | `test_all_caps_multi_word_query` | A fully capitalised multi-word query works correctly |
+| 11 | `test_multi_word_returns_only_pages_with_all_words` | Only pages containing every query word are returned |
+| 12 | `test_multi_word_no_overlap_returns_empty` | No page containing all words returns an empty list |
+| 13 | `test_multi_word_no_overlap_prints_specific_message` | Output includes "No pages contain all of" when no overlap |
+| 14 | `test_single_word_query_returns_all_matching_pages` | All pages containing a word are returned |
+| 15 | `test_friends_does_not_return_friendship_page` | Searching `friends` does not return pages with only `friendship` |
+| 16 | `test_friendship_does_not_return_friends_page` | Searching `friendship` does not return pages with only `friends` |
+| 17 | `test_exact_match_returns_correct_page` | `friendship` returns only the page where it appears exactly |
+| 18 | `test_print_word_shows_url` | `print_word` output includes the page URL |
+| 19 | `test_print_word_shows_frequency` | `print_word` output includes the word frequency |
+| 20 | `test_print_word_shows_positions` | `print_word` output includes the word positions |
+| 21 | `test_print_word_not_in_index` | `print_word` prints "not found" for a missing word |
+| 22 | `test_print_word_empty_input` | `print_word` prints a usage hint for empty input |
+| 23 | `test_print_word_case_insensitive` | `print_word` finds a word regardless of input case |
+| 24 | `test_tfidf_higher_normalised_tf_ranks_first` | Page with higher normalised TF ranks above lower |
+| 25 | `test_tfidf_lower_normalised_tf_ranks_last` | Page with the lowest normalised TF ranks last |
+| 26 | `test_tfidf_common_word_returns_all_pages` | A word on all pages returns all pages in results |
+| 27 | `test_tfidf_rare_word_dominates_score_in_multi_word_query` | A rare word drives ranking when a common word has IDF = 0 |
+| 28 | `test_tfidf_shorter_page_with_higher_density_ranks_higher` | A shorter page with higher word density outranks a longer page with more raw occurrences |
+| 29 | `test_rank_results_empty_list` | `rank_results` returns an empty list when given no URLs |
+| 30 | `test_three_word_query_returns_page_with_all_three` | A three-word AND query returns only pages with all three words |
+| 31 | `test_three_word_query_no_page_has_all_three` | A three-word query with no matching page returns empty |
+| 32 | `test_duplicate_words_in_query_behave_like_single_word` | Searching a word twice gives the same results as once |
+| 33 | `test_multiple_missing_words_all_named` | All missing words appear in the missing list |
+| 34 | `test_find_and_print_names_all_missing_words` | `find_and_print` output mentions all missing words |
+| 35 | `test_print_word_strips_surrounding_whitespace` | `print_word` finds a word even with surrounding spaces in input |
+
+</details>
