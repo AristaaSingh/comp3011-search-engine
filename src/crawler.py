@@ -13,6 +13,7 @@ Required libraries (both explicitly recommended in the brief):
 
 import time
 import logging
+from collections import deque
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -122,12 +123,12 @@ def crawl_site(start_url: str = START_URL) -> list[PageData]:
     """
     pages: list[PageData] = []
     visited: set[str] = set() # prevents fetching the same URL twice
-    queue: list[str] = [start_url] # BFS queue of URLs to visit
+    queue: deque[str] = deque([start_url]) # BFS queue, deque gives O(1) popleft vs O(n) for list.pop(0)
 
     first_request = True # no sleep before the very first request
 
     while queue:
-        current_url = queue.pop(0) # take from front, breadth first
+        current_url = queue.popleft() # O(1) removal from front
 
         # Skip URLs already processed (queue may contain duplicates)
         if current_url in visited:
@@ -158,7 +159,7 @@ def crawl_site(start_url: str = START_URL) -> list[PageData]:
         soup = BeautifulSoup(html, "html.parser")
         for link in find_all_links(soup, current_url):
             if link not in visited:
-                queue.append(link)
+                queue.append(link) # append to back, popleft from front = FIFO
 
     logger.info("Crawling complete. Total pages: %d", len(pages))
     return pages
