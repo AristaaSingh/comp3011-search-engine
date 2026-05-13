@@ -7,7 +7,7 @@ Each page's visible text is extracted and returned as a list of
 PageData objects for the indexer to process.
 
 Required libraries (both explicitly recommended in the brief):
-  - requests       : sends HTTP GET requests
+  - requests : sends HTTP GET requests
   - beautifulsoup4 : parses HTML and extracts text / links
 """
 
@@ -145,7 +145,7 @@ def crawl_site(start_url: str = START_URL) -> list[PageData]:
 
         if html is None:
             # Network / HTTP error log already printed inside fetch_page
-            logger.warning("Skipping %s — could not fetch", current_url)
+            logger.warning("Skipping %s: could not fetch", current_url)
             continue # skip this page, keep crawling the rest of the queue
 
         # Extract visible text for the index

@@ -1,5 +1,5 @@
 """
-main.py — Command-line interface for the search engine.
+main.py: Command-line interface for the search engine.
 
 Supports four commands as specified in the brief:
     build               Crawl the site, build the index, save to disk
@@ -21,7 +21,7 @@ def run_shell() -> None:
     """Start the interactive command loop."""
     index = None
 
-    print("Search Engine — type 'help' for available commands.\n")
+    print("Search Engine: type 'help' for available commands.\n")
 
     while True:
         try:
@@ -38,7 +38,7 @@ def run_shell() -> None:
         args = parts[1] if len(parts) > 1 else ""
 
         if command == "build":
-            print("Crawling site — this will take a while (~20 mins, 6s between requests)...")
+            print("Crawling site, this will take a while (~20 mins, 6s between requests)...")
             print("Pages crawled so far will be shown as they are fetched.\n")
             pages = crawl_site()
             index = build_index(pages)
@@ -48,7 +48,7 @@ def run_shell() -> None:
         elif command == "load":
             try:
                 index = load_index()
-                print(f"Index loaded — {len(index)} unique word(s).")
+                print(f"Index loaded: {len(index)} unique word(s).")
             except FileNotFoundError as e:
                 print(f"Error: {e}")
 

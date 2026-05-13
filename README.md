@@ -71,7 +71,7 @@ comp3011-search-engine/
 
 **1. Clone the repository:**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/AristaaSingh/comp3011-search-engine.git
 cd comp3011-search-engine
 ```
 
@@ -112,20 +112,29 @@ python -m src.main
 
 You will see a `>` prompt. The four available commands are:
 
+| Command | Description |
+|---|---|
+| `build` | Crawl the site, build the index, and save it to disk |
+| `load` | Load a previously saved index from disk |
+| `print <word>` | Print the index entry for a word |
+| `find <word(s)>` | Find all pages containing all given words |
+
+---
+
 **build:** crawls the entire site, builds the inverted index, and saves it to `data/index.json`. This takes around 20 minutes due to the required 6-second politeness window between requests.
 ```
 > build
-Crawling site — this will take a while (~20 mins, 6s between requests)...
+Crawling site: this will take a while (~20 mins, 6s between requests)...
   [1] https://quotes.toscrape.com/
   [2] https://quotes.toscrape.com/page/2/
   ...
-Done. 206 page(s) crawled, 8421 unique word(s) indexed.
+Done. 214 page(s) crawled, 4425 unique word(s) indexed.
 ```
 
 **load:** loads a previously built index from `data/index.json`. Use this instead of `build` if the index has already been generated.
 ```
 > load
-Index loaded — 8421 unique word(s).
+Index loaded: 4425 unique word(s).
 ```
 
 **print:** prints the full index entry for a word, showing every page it appears on with its frequency and positions.
@@ -152,7 +161,7 @@ Results for 'indifference' — 1 word(s), 2 page(s) found:
 ```
 > find good friends
 
-Results for 'good friends' — 2 word(s), 1 page(s) found:
+Results for 'good friends' : 2 word(s), 1 page(s) found:
 
   https://quotes.toscrape.com/page/4/
 ```
@@ -161,13 +170,24 @@ Results for 'good friends' — 2 word(s), 1 page(s) found:
 
 ## Approach
 
-Each component is tested independently using pytest, with each function tested in isolation rather than through the full pipeline. This makes it easier to pinpoint exactly where a failure occurs.
+Each component (crawler, indexer, search) is tested independently using pytest. Functions are tested in isolation rather than through the full pipeline, making it easier to pinpoint exactly where a failure occurs.
 
-Key strategies used:
-- **Mocking:** functions with external dependencies (network requests, `time.sleep`) are patched using `unittest.mock.patch` so tests run offline and instantly
-- **Fixtures:** pytest's `tmp_path` fixture is used for file system tests, and shared `@pytest.fixture` functions build small controlled indexes for search tests
-- **Controlled data:** indexer and search tests use hardcoded `PageData` objects with known text, so results are always predictable
-- **Edge cases:** empty inputs, missing words, punctuation, case variations, duplicate query terms, and invalid file structures are all explicitly tested
+**Isolation and mocking:**
+- Functions with external dependencies are never tested against those dependencies directly
+- `fetch_page` and `time.sleep` are patched using `unittest.mock.patch` in crawler tests, so `crawl_site` can be tested fully offline and without waiting for the politeness delay
+- File system tests use pytest's built-in `tmp_path` fixture to create temporary directories that are automatically cleaned up after each test
+
+**Controlled test data:**
+- Indexer and search tests construct small `PageData` objects with known, hardcoded text rather than relying on the real crawled index
+- This means test outcomes are always deterministic and do not depend on the live site
+- A shared `@pytest.fixture` builds the index once and reuses it across multiple tests in the same file
+
+**Coverage of edge cases:**
+- Empty inputs (empty query string, empty page text, empty word list)
+- Punctuation handling (punctuation-only text, punctuation attached to words)
+- Case variations (`Good`, `GOOD`, and `good` all treated as the same word)
+- Boundary behaviour (duplicate words in a query, multiple missing words, whitespace around inputs)
+- Error conditions (missing index file, structurally invalid index file, 404 URL)
 
 ## How to Run
 
@@ -190,7 +210,9 @@ python -m pytest tests/test_indexer.py tests/test_search.py -v
 
 ## Test File Overview
 
-**test_crawler.py** — tests all four functions in `crawler.py`
+The suite contains **85 tests** in total: 24 in `test_crawler.py`, 28 in `test_indexer.py`, and 33 in `test_search.py`.
+
+**test_crawler.py** (24 tests): tests all four functions in `crawler.py`
 
 | Function | Approach | What is verified |
 |---|---|---|
@@ -199,7 +221,7 @@ python -m pytest tests/test_indexer.py tests/test_search.py -v
 | `find_all_links` | Hand-crafted HTML with various link types | Relative to absolute conversion, external domains excluded, fragments stripped, no duplicates, `mailto:` and `javascript:` filtered out |
 | `crawl_site` | `fetch_page` and `time.sleep` both mocked | Correct page count, URLs recorded, failed pages skipped, no URL revisited |
 
-**test_indexer.py** — tests all five functions in `indexer.py`
+**test_indexer.py** (28 tests): tests all five functions in `indexer.py`
 
 | Function | Approach | What is verified |
 |---|---|---|
@@ -208,7 +230,7 @@ python -m pytest tests/test_indexer.py tests/test_search.py -v
 | Edge cases | Hardcoded inputs | Empty page text, punctuation-only text, mixed punctuation attached to words |
 | `save_index`, `load_index` | `tmp_path` fixture for temporary files | Full round-trip, overwriting existing file, `FileNotFoundError` on missing file, `ValueError` on invalid structure |
 
-**test_search.py** — tests all four functions in `search.py`
+**test_search.py** (33 tests): tests all four functions in `search.py`
 
 | Function | Approach | What is verified |
 |---|---|---|
