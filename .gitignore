@@ -26,5 +26,6 @@ htmlcov/
 Thumbs.db
 
 # Data output
-data/*.json
 data/*.pkl
+# index.json is intentionally tracked (required for submission)
+
