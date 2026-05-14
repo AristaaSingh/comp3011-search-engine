@@ -18,9 +18,10 @@ Plus:
   12. Did you mean suggestions : close matches shown for missing words
 """
 
+import time
 import pytest
 from src.crawler import PageData
-from src.indexer import build_index
+from src.indexer import build_index, save_index, load_index
 from src.search import find_pages, print_word, find_and_print, rank_results, suggest_words
 
 URL_1 = "https://quotes.toscrape.com/"
@@ -164,8 +165,8 @@ def test_print_word_case_insensitive(index, capsys):
 # "common" appears on all three pages, giving IDF("common") = log(3/3) = 0.
 #
 # URL_1: "rare rare rare common" -> 4 tokens, rare TF = 3/4 = 0.75
-# URL_2: "rare common"          -> 2 tokens, rare TF = 1/2 = 0.50
-# URL_3: "common"               -> 1 token,  no rare
+# URL_2: "rare common" -> 2 tokens, rare TF = 1/2 = 0.50
+# URL_3: "common" -> 1 token,  no rare
 #
 # With normalised TF-IDF, URL_1 still ranks above URL_2 for "rare"
 # because 0.75 > 0.50, and normalisation doesn't change that here.
@@ -176,8 +177,8 @@ def test_print_word_case_insensitive(index, capsys):
 def ranking_index():
     pages = [
         PageData(url=URL_1, text="rare rare rare common"), # 4 tokens, rare TF = 3/4
-        PageData(url=URL_2, text="rare common"),           # 2 tokens, rare TF = 1/2
-        PageData(url=URL_3, text="common"),                # 1 token,  no rare
+        PageData(url=URL_2, text="rare common"), # 2 tokens, rare TF = 1/2
+        PageData(url=URL_3, text="common"), # 1 token,  no rare
     ]
     return build_index(pages)
 
@@ -211,8 +212,8 @@ def test_tfidf_shorter_page_with_higher_density_ranks_higher():
     # Normalisation benefit: URL_2 is shorter but has higher word density.
     # URL_3 has no "good" so IDF("good") = log(3/2) > 0, making scores non-zero.
     # URL_1: "good good good filler filler filler filler filler" -> good TF = 3/8 = 0.375
-    # URL_2: "good good"                                         -> good TF = 2/2 = 1.0
-    # URL_3: "filler"                                            -> no good
+    # URL_2: "good good" -> good TF = 2/2 = 1.0
+    # URL_3: "filler" -> no good
     # URL_2 should rank above URL_1 despite fewer raw occurrences, because
     # normalised TF (1.0) beats (0.375) when page length is accounted for.
     pages = [
@@ -316,3 +317,68 @@ def test_find_and_print_no_suggestion_for_gibberish(index, capsys):
     out = capsys.readouterr().out
     assert "not found" in out
     assert "Did you mean" not in out
+
+
+# Case 13: Integration test (full pipeline)
+#
+# Verifies that find_and_print produces correct output when the index is
+# built, saved, loaded, and searched in sequence. This crosses the boundary
+# between the indexer and search components, which the unit tests above do
+# not cover since they use a pre-built in-memory fixture.
+
+def test_find_and_print_after_save_load(tmp_path, capsys):
+    """find_and_print should return correct results after a full save/load cycle."""
+    pages = [
+        PageData(url=URL_1, text="life is good"),
+        PageData(url=URL_2, text="good friends make life better"),
+        PageData(url=URL_3, text="friendship and wonder"),
+    ]
+    index = build_index(pages)
+    path = tmp_path / "index.json"
+    save_index(index, path)
+    loaded = load_index(path)
+
+    find_and_print(loaded, "good friends")
+    assert URL_2 in capsys.readouterr().out
+
+
+# Case 14: Performance tests
+#
+# Verifies that ranking and search operations complete within acceptable
+# time bounds on a 200-page index. The large_index fixture uses
+# scope='module' so it is built once and shared across both tests,
+# avoiding repeated construction overhead.
+
+PERF_VOCAB = ["life", "good", "friend", "hope", "dream", "love", "world",
+              "heart", "mind", "soul", "time", "way", "day", "truth", "light",
+              "wonder", "beauty", "change", "faith", "grace"]
+
+
+@pytest.fixture(scope="module")
+def large_index():
+    """200-page index built once and shared across performance tests."""
+    pages = [
+        PageData(
+            url=f"https://example.com/page/{i}/",
+            text=" ".join(PERF_VOCAB[j % len(PERF_VOCAB)] for j in range(i, i + 50)),
+        )
+        for i in range(200)
+    ]
+    return build_index(pages)
+
+
+def test_rank_results_performance(large_index):
+    """rank_results across 200 URLs should complete in under 0.1 seconds."""
+    urls = [f"https://example.com/page/{i}/" for i in range(200)]
+    start = time.perf_counter()
+    rank_results(large_index, urls, ["life"])
+    elapsed = time.perf_counter() - start
+    assert elapsed < 0.1, f"rank_results took {elapsed:.3f}s, expected < 0.1s"
+
+
+def test_find_pages_performance(large_index):
+    """find_pages on a 200-page index should complete in under 0.1 seconds."""
+    start = time.perf_counter()
+    find_pages(large_index, ["life"])
+    elapsed = time.perf_counter() - start
+    assert elapsed < 0.1, f"find_pages took {elapsed:.3f}s, expected < 0.1s"

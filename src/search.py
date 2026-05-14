@@ -33,7 +33,7 @@ def suggest_words(index: IndexType, word: str) -> list[str]:
     Uses difflib.get_close_matches which computes a similarity ratio based
     on the longest common subsequence. A cutoff of 0.6 means the candidate
     must share at least 60% similarity with the query word. This catches
-    common typos (e.g. 'frends' -> 'friends') without suggesting completely
+    common typos (eg 'frends' -> 'friends') without suggesting completely
     unrelated words. The cutoff is a deliberate trade-off: lower values
     produce more suggestions but risk irrelevant ones.
 
@@ -63,8 +63,8 @@ def rank_results(index: IndexType, urls: list[str], words: list[str]) -> list[st
     precomputed by build_index and stored in the index under "__meta__",
     so they are read once rather than recalculated on every query.
 
-    Example: query "indifference" across 214 pages, appears on 3:
-      IDF = log(214 / 3) = 4.27
+    Example: query "indifference" across 213 pages, appears on 3:
+      IDF = log(213 / 3) = 4.27
       page/1: frequency 2, doc length 80  -> TF = 0.025, score = 0.025 * 4.27 = 0.107
       page/2: frequency 1, doc length 20  -> TF = 0.05,  score = 0.05  * 4.27 = 0.214
       page/2 ranks first despite lower raw frequency, because it is shorter.

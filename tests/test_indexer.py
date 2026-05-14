@@ -8,17 +8,24 @@ Covers:
   4. Multiple pages        : same word tracked across different pages
   5. Edge cases            : empty text, punctuation, very little content
   6. Save / load           : index survives a round-trip to disk as JSON
+  7. tokenise directly     : regex, numbers, contractions, hyphens
+  8. Save / load edge cases : overwrite, invalid structure
+  9. Integration           : save -> load -> find_pages (persistence pipeline)
+  10. Performance          : build_index on 200 pages completes within 1 second
 """
 
 import json
+import time
 import pytest
 from pathlib import Path
 
 from src.crawler import PageData
 from src.indexer import tokenise, add_page_to_index, build_index, save_index, load_index
+from src.search import find_pages
 
 URL_1 = "https://quotes.toscrape.com/"
 URL_2 = "https://quotes.toscrape.com/page/2/"
+URL_3 = "https://quotes.toscrape.com/page/3/"
 
 
 # Helper
@@ -250,3 +257,71 @@ def test_load_raises_valueerror_on_invalid_structure(tmp_path):
         json.dump({"word": "not_a_dict"}, f)
     with pytest.raises(ValueError):
         load_index(path)
+
+
+# Test 9: Integration tests (persistence pipeline)
+#
+# These tests verify that the indexer and search components work correctly
+# together across a full save/load cycle. Unlike the unit tests above which
+# test indexer functions in isolation, these tests confirm that a loaded
+# index produces the same search results as the original in-memory index.
+
+def test_save_load_find_returns_same_results(tmp_path):
+    """find_pages should return the same results before and after a save/load cycle."""
+    pages = [
+        make_page("life is good", url=URL_1),
+        make_page("good friends make life better", url=URL_2),
+        make_page("friendship and wonder", url=URL_3),
+    ]
+    index = build_index(pages)
+    path = tmp_path / "index.json"
+    save_index(index, path)
+    loaded = load_index(path)
+
+    original_results, _ = find_pages(index, ["life"])
+    loaded_results, _ = find_pages(loaded, ["life"])
+    assert set(loaded_results) == set(original_results)
+
+
+def test_save_load_preserves_ranking_order(tmp_path):
+    """Ranking order should be identical before and after a save/load cycle.
+
+    This specifically verifies that the '__meta__' key (containing precomputed
+    doc_lengths and total_pages) survives JSON serialisation correctly, since
+    ranking depends on it.
+    """
+    pages = [
+        make_page("rare rare rare common", url=URL_1),  # rare TF = 3/4 = 0.75
+        make_page("rare common", url=URL_2),             # rare TF = 1/2 = 0.50
+        make_page("common", url=URL_3),                  # no rare
+    ]
+    index = build_index(pages)
+    path = tmp_path / "index.json"
+    save_index(index, path)
+    loaded = load_index(path)
+
+    original_results, _ = find_pages(index, ["rare"])
+    loaded_results, _ = find_pages(loaded, ["rare"])
+    assert loaded_results[0] == original_results[0]  # URL_1 ranks first in both
+
+
+# Test 10: Performance tests
+
+PERF_VOCAB = ["life", "good", "friend", "hope", "dream", "love", "world",
+              "heart", "mind", "soul", "time", "way", "day", "truth", "light",
+              "wonder", "beauty", "change", "faith", "grace"]
+
+
+def test_build_index_performance():
+    """build_index on 200 pages of 100 tokens each should complete in under 1 second."""
+    pages = [
+        PageData(
+            url=f"https://example.com/page/{i}/",
+            text=" ".join(PERF_VOCAB * 5),  # 100 tokens per page
+        )
+        for i in range(200)
+    ]
+    start = time.perf_counter()
+    build_index(pages)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 1.0, f"build_index took {elapsed:.3f}s, expected < 1.0s"
