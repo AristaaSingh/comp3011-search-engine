@@ -8,6 +8,25 @@ The tool works in two phases:
 - **Build:** crawls the entire site (quote pages, author pages, tag pages), extracts visible text, and saves the inverted index to disk as a JSON file.
 - **Search:** loads the saved index and lets you look up individual words or search for pages containing all words in a query.
 
+---
+
+## Table of Contents
+
+- [Index Data Structure](#index-data-structure)
+- [Architecture and Design Decisions](#architecture-and-design-decisions)
+- [Project Structure](#project-structure)
+- [Installation and Setup](#installation-and-setup)
+- [Commands and Usage](#commands-and-usage)
+- [Testing](#testing)
+  - [Approach](#approach)
+  - [How to Run](#how-to-run)
+  - [Test File Overview](#test-file-overview)
+    - [test_crawler.py (24 tests)](#test_crawlerpy-24-tests)
+    - [test_indexer.py (31 tests)](#test_indexerpy-31-tests)
+    - [test_search.py (44 tests)](#test_searchpy-44-tests)
+
+---
+
 ## Index Data Structure
 
 The index is an inverted index, meaning it maps words to pages rather than pages to words. This makes lookups fast: to find every page containing a word, you go directly to that word's entry rather than scanning through every page.
@@ -247,7 +266,7 @@ python -m pytest tests/test_indexer.py tests/test_search.py -v
 
 ## Test File Overview
 
-The suite contains **100 tests** in total: 24 in `test_crawler.py`, 31 in `test_indexer.py`, and 45 in `test_search.py`.
+The suite contains **99 tests** in total: 24 in `test_crawler.py`, 31 in `test_indexer.py`, and 44 in `test_search.py`.
 
 ### test_crawler.py (24 tests)
 
@@ -338,10 +357,13 @@ Tests all five functions in `indexer.py`.
 | 26 | `test_tokenise_already_lowercase` | Output is always lowercase regardless of input case |
 | 27 | `test_save_index_overwrites_existing_file` | Saving to an existing path replaces the previous file |
 | 28 | `test_load_raises_valueerror_on_invalid_structure` | `load_index` raises `ValueError` on a structurally broken file |
+| 29 | `test_save_load_find_returns_same_results` | `find_pages` returns the same results before and after a save/load cycle |
+| 30 | `test_save_load_preserves_ranking_order` | Ranking order is identical before and after save/load, confirming `__meta__` survives JSON serialisation |
+| 31 | `test_build_index_performance` | `build_index` on 200 pages of 100 tokens each completes in under 1 second |
 
 </details>
 
-### test_search.py (45 tests)
+### test_search.py (44 tests)
 
 Tests all five functions in `search.py`.
 
@@ -401,5 +423,8 @@ Tests all five functions in `search.py`.
 | 39 | `test_print_word_shows_did_you_mean` | `print_word` prints a "Did you mean" hint when a near-miss exists |
 | 40 | `test_find_and_print_shows_did_you_mean` | `find_and_print` prints a "Did you mean" hint for a near-miss word |
 | 41 | `test_find_and_print_no_suggestion_for_gibberish` | `find_and_print` prints "not found" without a suggestion for gibberish input |
+| 42 | `test_find_and_print_after_save_load` | `find_and_print` returns correct output after a full build → save → load pipeline |
+| 43 | `test_rank_results_performance` | `rank_results` on a 200-URL index completes in under 0.1 seconds |
+| 44 | `test_find_pages_performance` | `find_pages` on a 200-page index completes in under 0.1 seconds |
 
 </details>

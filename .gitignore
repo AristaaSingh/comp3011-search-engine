@@ -18,14 +18,9 @@ htmlcov/
 # Local config / editor files
 .vscode/
 .idea/
-.claude/
 *.swp
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Data output
-data/*.pkl
-# index.json is intentionally tracked (required for submission)
 
